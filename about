@@ -1,0 +1,18 @@
+1. Admin defines ROUTES (with ordered stops + direction)
+
+2. System defines TIME SLOTS (timetable per route)
+
+3. Staff/Driver:
+   → books a slot (creates Trip)
+   → gets reminder
+   → clicks START → trip becomes running
+
+4. User:
+   → selects stops OR route
+   → sees matching trips (time + direction)
+   → selects bus → joins room → live tracking
+
+
+
+
+   
