@@ -16,3 +16,4 @@
 
 
    
+   PS H:\bus\bus\backend> npx nodemon server.js # backend

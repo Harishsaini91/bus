@@ -3,7 +3,7 @@ const router = express.Router();
 const Route = require("../models/Route");
 
 
-// ➕ CREATE ROUTE
+// ➕ CREATE ROUTE (UPDATED)
 router.post("/create", async (req, res) => {
   try {
     let { stops } = req.body;
@@ -17,21 +17,44 @@ router.post("/create", async (req, res) => {
     // 🔁 sort by order
     stops.sort((a, b) => a.order - b.order);
 
-    // 🎯 extract fields
-    const startStop = stops[0].name;
-    const endStop = stops[stops.length - 1].name;
+    // 🔥 normalize + build fields
+    let stop_names = [];
+    let stop_ids = [];
 
-    const stopNames = stops.map(s => s.name);
+    let processedStops = stops.map((s) => {
+      const name = s.name.toLowerCase().trim();
 
-    // 🧠 auto generate name
-    const name = `${startStop} → ${endStop}`;
+      stop_names.push(name);
+
+      if (s.station_id) {
+        stop_ids.push(s.station_id);
+      }
+
+      return {
+        station_id: s.station_id || null,
+        name,
+        order: s.order
+      };
+    });
+
+    // 🎯 start & end (must be station_id ideally)
+    const start_station_id = processedStops[0].station_id;
+    const end_station_id = processedStops[processedStops.length - 1].station_id;
+
+    const startName = processedStops[0].name;
+    const endName = processedStops[processedStops.length - 1].name;
+
+    // 🧠 auto name
+    const name = `${startName} → ${endName}`;
 
     const route = new Route({
       name,
-      startStop,
-      endStop,
-      stopNames,
-      stops
+      start_station_id,
+      end_station_id,
+      stop_ids,
+      stop_names,
+      stops: processedStops,
+      total_stops: processedStops.length
     });
 
     await route.save();
@@ -43,19 +66,42 @@ router.post("/create", async (req, res) => {
   }
 });
 
-// 🔍 SEARCH ROUTES BY STOPS
+
+// 🔍 SEARCH ROUTES (FAST VERSION 🔥)
 router.post("/search", async (req, res) => {
   try {
-    const { startStop, endStop } = req.body;
+    const { from_id, to_id, from_name, to_name } = req.body;
 
-    const routes = await Route.find({
-      stopNames: { $all: [startStop, endStop] }
-    });
+    let routes = [];
+
+    // ⚡ CASE 1: FAST PATH (station_id)
+    if (from_id && to_id) {
+      routes = await Route.find({
+        stop_ids: { $all: [from_id, to_id] },
+        is_active: true
+      });
+    }
+
+    // ⚡ CASE 2: NAME BASED (fallback)
+    else if (from_name && to_name) {
+      const f = from_name.toLowerCase();
+      const t = to_name.toLowerCase();
+
+      routes = await Route.find({
+        stop_names: { $all: [f, t] },
+        is_active: true
+      });
+    }
 
     // 🔥 direction filter
     const filtered = routes.filter(route => {
-      const s = route.stopNames.indexOf(startStop);
-      const e = route.stopNames.indexOf(endStop);
+      const s = route.stop_names.indexOf(
+        (from_name || "").toLowerCase()
+      );
+      const e = route.stop_names.indexOf(
+        (to_name || "").toLowerCase()
+      );
+
       return s !== -1 && e !== -1 && s < e;
     });
 
@@ -73,8 +119,8 @@ router.get("/search-name", async (req, res) => {
     const { q } = req.query;
 
     const routes = await Route.find({
-      name: { $regex: q, $options: "i" }
-    });
+      name: { $regex: `^${q}`, $options: "i" }
+    }).limit(10);
 
     res.json(routes);
 
@@ -82,34 +128,5 @@ router.get("/search-name", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 module.exports = router;
