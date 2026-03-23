@@ -8,66 +8,92 @@ function watchRoutes(io, redisClient) {
   });
 
   changeStream.on("change", async (change) => {
+    console.log("🔥 Route changed:", change.operationType);
+
     try {
-      const { operationType, fullDocument, documentKey } = change;
+      console.log("🔄 Fetching latest routes from DB...");
 
-      console.log("🔥 Route change:", operationType);
+      const routes = await Route.find({ is_active: true })
+        .select("_id name start_station_id end_station_id stop_ids")
+        .lean();
 
-      // 🔴 DELETE
-      if (operationType === "delete") {
-        const routeId = documentKey._id.toString();
+      console.log("📦 Routes count:", routes.length);
 
-        console.log("🗑 Removing route:", routeId);
+      // 🔥 CLEAR OLD CACHE
+      const keys = await redisClient.keys("route:*");
+      if (keys.length) await redisClient.del(keys);
 
-        // ⚠️ You need old stop_ids (store in Redis or skip)
-        // Optional: maintain reverse index
+      const stationKeys = await redisClient.keys("station:*:routes");
+      if (stationKeys.length) await redisClient.del(stationKeys);
 
-        await redisClient.del(`route:${routeId}:meta`);
+      // 🔥 NEW: clear route name maps
+      await redisClient.del("routes:id_name");
+      await redisClient.del("routes:name_id");
 
-        io.emit("routes_updated");
-        return;
+      // 🔄 TEMP MAPS
+      const routeIdNameMap = {};
+      const routeNameIdMap = {};
+
+      // 🔄 REBUILD ALL
+      for (const r of routes) {
+        const routeId = String(r._id);
+        const routeName = r.name;
+
+        const coreKey = `route:${routeId}:core`;
+        const detailsKey = `route:${routeId}:details`;
+
+        const stopIds = (r.stop_ids || []).map(id => id.toString());
+
+        // ✅ CORE
+        const coreData = {
+          route_id: routeId,
+          start_station_id: r.start_station_id?.toString(),
+          end_station_id: r.end_station_id?.toString()
+        };
+
+        // ✅ DETAILS
+        const detailsData = {
+          route_id: routeId,
+          name: routeName,
+          stop_ids: stopIds
+        };
+
+        await Promise.all([
+          redisClient.set(coreKey, JSON.stringify(coreData)),
+          redisClient.set(detailsKey, JSON.stringify(detailsData))
+        ]);
+
+        // 🔥 station → routes mapping
+        for (const stationId of stopIds) {
+          const key = `station:${stationId}:routes`;
+
+          let existing = await redisClient.get(key);
+          let routesArr = existing ? JSON.parse(existing) : [];
+
+          if (!routesArr.includes(routeId)) {
+            routesArr.push(routeId);
+          }
+
+          await redisClient.set(key, JSON.stringify(routesArr));
+        }
+
+        // 🔥 NEW: build route name maps
+        const normalize = (s) => s.toLowerCase().trim();
+
+        routeIdNameMap[routeId] = routeName;
+        routeNameIdMap[normalize(routeName)] = routeId;
       }
 
-      // 🟢 INSERT / UPDATE
-      if (!fullDocument) return;
+      // 🔥 SAVE ROUTE NAME MAPS
+      await Promise.all([
+        redisClient.set("routes:id_name", JSON.stringify(routeIdNameMap)),
+        redisClient.set("routes:name_id", JSON.stringify(routeNameIdMap))
+      ]);
 
-      const routeId = fullDocument._id.toString();
-      const stopIds = (fullDocument.stop_ids || []).map(id => id.toString());
-
-      // 🔥 Minimal route data
-      const routeMeta = {
-        route_id: routeId,
-        name: fullDocument.name,
-        start_station_id: fullDocument.start_station_id?.toString(),
-        end_station_id: fullDocument.end_station_id?.toString()
-      };
-
-      // 🔥 1. Save route meta
-      await redisClient.set(
-        `route:${routeId}:meta`,
-        JSON.stringify(routeMeta)
-      );
-
-      // 🔥 2. Update station → routes mapping
-      for (const stationId of stopIds) {
-        const key = `station:${stationId}:routes`;
-
-        let existing = await redisClient.get(key);
-        let routes = existing ? JSON.parse(existing) : [];
-
-        // remove if already exists (avoid duplicates)
-        routes = routes.filter(r => r.route_id !== routeId);
-
-        // add updated route
-        routes.push(routeMeta);
-
-        await redisClient.set(key, JSON.stringify(routes));
-      }
-
-      console.log("⚡ Route Redis updated");
+      console.log("⚡ Redis fully rebuilt (routes + name index)");
 
       // 🚀 Notify frontend
-      io.emit("routes_updated", { route_id: routeId });
+      io.emit("routes_updated", { version: Date.now() });
 
     } catch (err) {
       console.error("❌ Route watcher error:", err);

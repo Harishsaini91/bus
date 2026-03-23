@@ -10,10 +10,6 @@ function watchStations(io, redisClient) {
   changeStream.on("change", async (change) => {
     console.log("🔥 Station changed:", change.operationType);
 
-    // 🔍 EXTRA DEBUG (VERY IMPORTANT)
-    console.log("📄 Change fullDocument:", change.fullDocument?._id);
-    console.log("📄 Change details:", change);
-
     try {
       console.log("🔄 Fetching latest stations from DB...");
 
@@ -23,18 +19,33 @@ function watchStations(io, redisClient) {
 
       console.log("📦 Stations count:", stations.length);
 
+      // 🔄 Build Maps
+      const idNameMap = {};
+      const nameIdMap = {};
+
+      for (const s of stations) {
+        const id = String(s._id);
+        const name = s.search_name.toLowerCase().trim();
+
+        idNameMap[id] = name;
+        nameIdMap[name] = id;
+      }
+
       const version = Date.now();
       console.log("🆕 New version:", version);
 
-      // 🔥 Update Redis
-      await redisClient.set("stations:all", JSON.stringify(stations));
-      await redisClient.set("stations:version", version);
+      // 💾 Update Redis (NO stations:all anymore)
+      await Promise.all([
+        redisClient.set("stations:id_name", JSON.stringify(idNameMap)),
+        redisClient.set("stations:name_id", JSON.stringify(nameIdMap)),
+        redisClient.set("stations:version", version)
+      ]);
 
       console.log("⚡ Redis updated successfully");
 
-      // 🔍 VERIFY REDIS DATA
-      const check = await redisClient.get("stations:all");
-      console.log("🧪 Redis verify count:", JSON.parse(check).length);
+      // 🔍 VERIFY
+      const check = await redisClient.get("stations:id_name");
+      console.log("🧪 Redis verify keys:", Object.keys(JSON.parse(check)).length);
 
       // 🚀 Notify frontend
       console.log("📡 Emitting stations_updated event...");

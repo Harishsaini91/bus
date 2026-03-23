@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-
 // 🛑 Helper to safely convert to ObjectId
 const toObjectId = (val) => {
   if (!val) return null;
@@ -9,42 +8,31 @@ const toObjectId = (val) => {
     : val;
 };
 
-
-// 🔹 STOP SUB-SCHEMA
-const StopSchema = new mongoose.Schema({
-  station_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Station",
-    index: true,
-    default: null
-  },
-
-  name: {
-    type: String,
-    required: true,
-    lowercase: true,
-    trim: true
-  },
-
-  location: {
-    type: {
-      type: String,
-      enum: ["Point"],
-      default: "Point"
-    },
-    coordinates: {
-      type: [Number],
+// 🔹 STOP SUB-SCHEMA (NO LOCATION)
+const StopSchema = new mongoose.Schema(
+  {
+    station_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Station",
+      index: true,
       default: null
+    },
+
+    name: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true
+    },
+
+    order: {
+      type: Number,
+      required: true,
+      index: true
     }
   },
-
-  order: {
-    type: Number,
-    required: true,
-    index: true
-  }
-});
-
+  { _id: false } // cleaner (no need separate _id per stop)
+);
 
 // 🔹 MAIN ROUTE SCHEMA
 const RouteSchema = new mongoose.Schema(
@@ -114,7 +102,7 @@ const RouteSchema = new mongoose.Schema(
 
 
 
-// 🔥 PRE-SAVE HOOK (VERY IMPORTANT)
+// 🔥 PRE-SAVE HOOK (DATA CLEANING + NORMALIZATION)
 RouteSchema.pre("save", function (next) {
   try {
     // 🔁 Convert start/end
@@ -122,29 +110,30 @@ RouteSchema.pre("save", function (next) {
     this.end_station_id = toObjectId(this.end_station_id);
 
     // 🔁 Convert stop_ids
-    this.stop_ids = this.stop_ids.map(id => toObjectId(id));
+    this.stop_ids = (this.stop_ids || []).map(id => toObjectId(id));
 
-    // 🔁 Convert stops.station_id
-    this.stops = this.stops.map(stop => {
+    // 🔁 Clean stops
+    this.stops = (this.stops || []).map(stop => {
       if (stop.station_id) {
         stop.station_id = toObjectId(stop.station_id);
       }
 
-      // normalize name
-      stop.name = stop.name.toLowerCase().trim();
-
-      return stop;
+      return {
+        station_id: stop.station_id || null,
+        name: stop.name.toLowerCase().trim(),
+        order: stop.order
+      };
     });
 
     // 🔁 Normalize stop_names
-    this.stop_names = this.stop_names.map(n =>
+    this.stop_names = (this.stop_names || []).map(n =>
       n.toLowerCase().trim()
     );
 
     // 🔁 Auto total_stops
     this.total_stops = this.stops.length;
 
-
+    // next();
   } catch (err) {
     next(err);
   }
@@ -152,11 +141,12 @@ RouteSchema.pre("save", function (next) {
 
 
 
-// 🔥 INDEXES
+// 🔥 INDEXES (OPTIMIZED)
 RouteSchema.index({ start_station_id: 1, end_station_id: 1 });
-// RouteSchema.index({ stop_ids: 1 });
-RouteSchema.index({ "stops.station_id": 1 }); // fallback search
-RouteSchema.index({ "stops.location": "2dsphere" });
 RouteSchema.index({ stop_ids: 1, is_active: 1 });
+RouteSchema.index({ "stops.station_id": 1 }); // fallback
+RouteSchema.index({ stop_names: 1 }); // name search
+
+
 
 module.exports = mongoose.model("Route", RouteSchema);

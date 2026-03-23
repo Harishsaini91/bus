@@ -56,35 +56,56 @@ router.get("/all", async (req, res) => {
   console.log("📡 /all API called");
 
   try {
-    const cacheKey = "stations:all";
+    const idNameKey = "stations:id_name";
+    const nameIdKey = "stations:name_id";
     const versionKey = "stations:version";
 
-    const cached = await redisClient.get(cacheKey);
-    const version = await redisClient.get(versionKey);
+    // 🔍 Check Redis
+    const [idNameCached, version] = await Promise.all([
+      redisClient.get(idNameKey),
+      redisClient.get(versionKey)
+    ]);
 
-    // ⚡ Return from Redis
-    if (cached) {
+    if (idNameCached) {
+      console.log("⚡ Serving from Redis");
+
       return res.json({
-        data: JSON.parse(cached),
+        data: JSON.parse(idNameCached), // ⚡ still "data"
         version
       });
-      console.log("⚡ Serving from Redis");
-    } else {
-      console.log("📦 Serving from MongoDB");
     }
+
+    console.log("📦 Serving from MongoDB");
 
     // 📦 Load from DB
     const stations = await Station.find({ is_active: true })
       .select("_id search_name")
       .lean();
 
+    // 🔄 Convert to maps
+    const idNameMap = {};
+    const nameIdMap = {};
+
+    for (const s of stations) {
+      const id = String(s._id);
+      const name = s.search_name.toLowerCase().trim();
+
+      idNameMap[id] = name;
+      nameIdMap[name] = id;
+    }
+
     const newVersion = Date.now();
 
-    await redisClient.set(cacheKey, JSON.stringify(stations), { EX: 86400 });
-    await redisClient.set(versionKey, newVersion);
+    // 💾 Store in Redis
+    await Promise.all([
+      redisClient.set(idNameKey, JSON.stringify(idNameMap), { EX: 86400 }),
+      redisClient.set(nameIdKey, JSON.stringify(nameIdMap), { EX: 86400 }),
+      redisClient.set(versionKey, newVersion)
+    ]);
 
+    // ✅ SAME RESPONSE STRUCTURE
     res.json({
-      data: stations,
+      data: idNameMap,
       version: newVersion
     });
 
@@ -95,13 +116,10 @@ router.get("/all", async (req, res) => {
 
 
 
-
 // find all route which pass by station (check ok )
 router.post("/by-station", async (req, res) => {
   try {
     const { stationId } = req.body;
-    // const { stationId } = "69bfe5890f3185e84991850e";
-
 
     if (!stationId) {
       return res.status(400).json({ message: "stationId required" });
@@ -114,7 +132,7 @@ router.post("/by-station", async (req, res) => {
     const cacheKey = `station:${stationId}:routes`;
     const versionKey = `station:${stationId}:routes:version`;
 
-    // 🔥 1. CHECK REDIS FIRST
+    // 🔥 Redis check
     const cached = await redisClient.get(cacheKey);
     const version = await redisClient.get(versionKey);
 
@@ -130,7 +148,6 @@ router.post("/by-station", async (req, res) => {
 
     const objectId = new mongoose.Types.ObjectId(stationId);
 
-    // 🔥 2. FETCH ONLY REQUIRED DATA
     const routes = await Route.find({
       stop_ids: objectId,
       is_active: true
@@ -138,7 +155,6 @@ router.post("/by-station", async (req, res) => {
       .select("_id name start_station_id end_station_id stop_ids")
       .lean();
 
-    // 🔥 3. FORMAT FOR REDIS (LIGHTWEIGHT)
     const formatted = routes.map(r => ({
       route_id: r._id,
       name: r.name,
@@ -149,9 +165,10 @@ router.post("/by-station", async (req, res) => {
 
     const newVersion = Date.now();
 
-    // 🔥 4. STORE IN REDIS
-    await redisClient.set(cacheKey, JSON.stringify(formatted), { EX: 86400 });
-    await redisClient.set(versionKey, newVersion);
+    await Promise.all([
+      redisClient.set(cacheKey, JSON.stringify(formatted), { EX: 86400 }),
+      redisClient.set(versionKey, newVersion)
+    ]);
 
     res.json({
       data: formatted,
@@ -163,7 +180,5 @@ router.post("/by-station", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 
 module.exports = router;
