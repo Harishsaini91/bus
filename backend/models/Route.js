@@ -144,7 +144,6 @@ RouteSchema.pre("save", function (next) {
     // 🔁 Auto total_stops
     this.total_stops = this.stops.length;
 
-    next();
 
   } catch (err) {
     next(err);
