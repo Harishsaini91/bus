@@ -6,7 +6,7 @@ const { redisClient } = require("../config/redis");
 const mongoose = require("mongoose");
 
 
-// ➕ CREATE STATION
+// ➕ CREATE STATION  ( check ok)
 router.post("/create", async (req, res) => {
   try {
     let { name, state, district, lat, lng, type } = req.body;
@@ -51,7 +51,7 @@ router.post("/create", async (req, res) => {
 
 
 
-// 🔥 GET ALL STATIONS
+// 🔥 GET ALL STATIONS (check ok)
 router.get("/all", async (req, res) => {
   console.log("📡 /all API called");
 
@@ -96,12 +96,11 @@ router.get("/all", async (req, res) => {
 
 
 
-
+// find all route which pass by station (check ok )
 router.post("/by-station", async (req, res) => {
   try {
     const { stationId } = req.body;
-
-    console.log(stationId);
+    // const { stationId } = "69bfe5890f3185e84991850e";
 
 
     if (!stationId) {
@@ -112,21 +111,59 @@ router.post("/by-station", async (req, res) => {
       return res.status(400).json({ message: "Invalid stationId" });
     }
 
+    const cacheKey = `station:${stationId}:routes`;
+    const versionKey = `station:${stationId}:routes:version`;
+
+    // 🔥 1. CHECK REDIS FIRST
+    const cached = await redisClient.get(cacheKey);
+    const version = await redisClient.get(versionKey);
+
+    if (cached) {
+      console.log("⚡ Routes from Redis");
+      return res.json({
+        data: JSON.parse(cached),
+        version
+      });
+    }
+
+    console.log("📦 Routes from MongoDB");
+
     const objectId = new mongoose.Types.ObjectId(stationId);
 
+    // 🔥 2. FETCH ONLY REQUIRED DATA
     const routes = await Route.find({
-      stop_ids: objectId,   // ✅ FIXED
-      // is_active: true
-    }).lean();
+      stop_ids: objectId,
+      is_active: true
+    })
+      .select("_id name start_station_id end_station_id stop_ids")
+      .lean();
 
-    console.log("🚍 Found routes:", routes.length);
+    // 🔥 3. FORMAT FOR REDIS (LIGHTWEIGHT)
+    const formatted = routes.map(r => ({
+      route_id: r._id,
+      name: r.name,
+      start_station_id: r.start_station_id,
+      end_station_id: r.end_station_id,
+      stop_ids: r.stop_ids
+    }));
 
-    res.json(routes);
+    const newVersion = Date.now();
+
+    // 🔥 4. STORE IN REDIS
+    await redisClient.set(cacheKey, JSON.stringify(formatted), { EX: 86400 });
+    await redisClient.set(versionKey, newVersion);
+
+    res.json({
+      data: formatted,
+      version: newVersion
+    });
 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
+
+
 
 module.exports = router;

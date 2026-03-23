@@ -7,6 +7,7 @@ const cors = require("cors");
 const connectDB = require("./config/db");
 const { connectRedis ,redisClient} = require("./config/redis");
 const watchStations = require("./watchers/stationWatcher");
+const RouteWatcher = require("./watchers/RouteWatcher");
 const { Server } = require("socket.io");
 
 const app = express();
@@ -36,10 +37,12 @@ const socketHandler = require("./sockets/socketHandler");
 
 const routeRoutes = require("./routes/routeRoutes");
 const stationRouter = require("./routes/stationRouter");
-const tripRoutes = require("./routes/tripRoutes");
+// const tripRoutes = require("./routes/tripRoutes");
+const slotRouter = require("./routes/slotRouter");
 
-app.use("/api/routes", routeRoutes);
+app.use("/api/routeRoutes", routeRoutes);
 app.use("/api/stationRouter", stationRouter);
+app.use("/api/slotRouter", slotRouter);
 // app.use("/api/trips", tripRoutes);
 
 
@@ -53,6 +56,7 @@ connectRedis();
 // after io creation
 socketHandler(io);
  watchStations(io, redisClient);
+ RouteWatcher(io, redisClient);
 // import socket logic
 require("./routes/bus_tracking")(io);
 
