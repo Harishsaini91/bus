@@ -17,3 +17,8 @@
 
    
    PS H:\bus\bus\backend> npx nodemon server.js # backend
+
+
+
+
+   link slot to their room and show live change by join different room using slotid

@@ -4,54 +4,118 @@ module.exports = (io) => {
   io.on("connection", (socket) => {
     console.log("🟢 Connected:", socket.id);
 
-    // ✅ USER JOINS SLOT
-   socket.on("joinSlot", async ({ slotId }) => {
-  const room = `slot:${slotId}`;
-  socket.join(room);
+    // 🔒 Track user's active slot
+    socket.currentSlot = null;
 
-  // send last known location
-  const last = await redisClient.get(`slot:${slotId}`);
-  if (last) {
-    socket.emit("receiveLocation", JSON.parse(last));
-  }
-});
+    // =========================
+    // ✅ JOIN SLOT ROOM
+    // =========================
+    socket.on("joinSlot", async ({ slotId }) => {
+      try {
+        if (!slotId) return;
 
-    // 🚌 SEND LOCATION
+        const room = `slot:${slotId}`;
+
+        // 🚪 Leave previous slot if exists
+        if (socket.currentSlot) {
+          socket.leave(`slot:${socket.currentSlot}`);
+        }
+
+        // ✅ Check slot exists in Redis
+        const details = await redisClient.get(`slot:${slotId}:details`);
+        if (!details) {
+          console.log("❌ Slot not found in Redis");
+          return;
+        }
+
+        socket.join(room);
+        socket.currentSlot = slotId;
+
+        console.log(`👥 ${socket.id} joined ${room}`);
+
+        // 📍 Send last known location
+        const last = await redisClient.get(`slot:${slotId}:location`);
+        if (last) {
+          socket.emit("receiveLocation", JSON.parse(last));
+        }
+
+      } catch (err) {
+        console.log("❌ joinSlot error:", err);
+      }
+    });
+
+    // =========================
+    // 🚌 SEND LOCATION (DRIVER)
+    // =========================
     socket.on("sendLocation", async (data) => {
       try {
         const { slotId, lat, lng } = data;
-        if (!slotId) return;
+        if (!slotId || lat == null || lng == null) return;
+
+        // ✅ Check slot status
+        const detailsRaw = await redisClient.get(`slot:${slotId}:details`);
+        if (!detailsRaw) return;
+
+        const details = JSON.parse(detailsRaw);
+
+        if (details.status !== "running") {
+          console.log("⛔ Location blocked (slot not running)");
+          return;
+        }
 
         const payload = {
           slotId,
           lat,
           lng,
-          time: Date.now(),
+          updated_at: Date.now(),
         };
 
-        // store in Redis
+        // 💾 Save in Redis
         await redisClient.set(
-          `slot:${slotId}`,
+          `slot:${slotId}:location`,
           JSON.stringify(payload)
         );
 
-        // 🔥 SEND ONLY TO ROOM
+        // 🚀 Emit to room
         io.to(`slot:${slotId}`).emit("receiveLocation", payload);
 
-        console.log("📍 Sent to room:", `slot:${slotId}`);
+        console.log("📍 Location broadcast:", slotId);
+
       } catch (err) {
-        console.log("❌ Error:", err);
+        console.log("❌ sendLocation error:", err);
       }
     });
 
-
-
+    // =========================
+    // 🚪 LEAVE SLOT
+    // =========================
     socket.on("leaveSlot", ({ slotId }) => {
-  socket.leave(`slot:${slotId}`);
-});
+      try {
+        if (!slotId) return;
 
+        socket.leave(`slot:${slotId}`);
+
+        if (socket.currentSlot === slotId) {
+          socket.currentSlot = null;
+        }
+
+        console.log(`🚪 ${socket.id} left slot:${slotId}`);
+      } catch (err) {
+        console.log("❌ leaveSlot error:", err);
+      }
+    });
+
+    // =========================
+    // 🔴 DISCONNECT
+    // =========================
     socket.on("disconnect", () => {
-      console.log("🔴 Disconnected:", socket.id);
+      if (socket.currentSlot) {
+        console.log(
+          `🔴 ${socket.id} disconnected from slot:${socket.currentSlot}`
+        );
+      } else {
+        console.log("🔴 Disconnected:", socket.id);
+      }
     });
   });
 };

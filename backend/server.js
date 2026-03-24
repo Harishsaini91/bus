@@ -8,6 +8,7 @@ const connectDB = require("./config/db");
 const { connectRedis ,redisClient} = require("./config/redis");
 const watchStations = require("./watchers/stationWatcher");
 const RouteWatcher = require("./watchers/RouteWatcher");
+const slotWatcher = require("./watchers/slotWatcher");
 const { Server } = require("socket.io");
 
 const app = express();
@@ -57,6 +58,7 @@ connectRedis();
 socketHandler(io);
  watchStations(io, redisClient);
  RouteWatcher(io, redisClient);
+ slotWatcher(io, redisClient);
 // import socket logic
 require("./routes/bus_tracking")(io);
 
