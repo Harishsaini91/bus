@@ -21,6 +21,9 @@ const io = new Server(server, {
   }
 });
 
+// 🔥 VERY IMPORTANT
+app.set("io", io);
+
 // Middleware
 app.use(cors());
 app.use(express.json());

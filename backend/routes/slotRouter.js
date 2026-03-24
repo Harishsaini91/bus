@@ -260,12 +260,16 @@ router.patch("/start", async (req, res) => {
   try {
     const { slot_id } = req.body;
 
+    // =========================
     // ✅ 1. Validation
+    // =========================
     if (!slot_id || !mongoose.Types.ObjectId.isValid(slot_id)) {
       return res.status(400).json({ message: "Valid slot_id required" });
     }
 
+    // =========================
     // ✅ 2. Find slot
+    // =========================
     const slot = await Slot.findById(slot_id);
 
     if (!slot) {
@@ -276,12 +280,13 @@ router.patch("/start", async (req, res) => {
       return res.status(400).json({ message: "Slot inactive" });
     }
 
-    // ⚠️ Optional: prevent duplicate start
     if (slot.status === "running") {
       return res.json({ message: "Slot already running", slot });
     }
 
+    // =========================
     // ✅ 3. Update DB
+    // =========================
     slot.status = "running";
     await slot.save();
 
@@ -289,7 +294,7 @@ router.patch("/start", async (req, res) => {
     const routeId = String(slot.route_id);
 
     // =========================
-    // 🔥 4. UPDATE REDIS
+    // 🔥 4. UPDATE REDIS (DETAILS)
     // =========================
     const detailsKey = `slot:${slotId}:details`;
 
@@ -308,15 +313,47 @@ router.patch("/start", async (req, res) => {
     await redisClient.set(detailsKey, JSON.stringify(detailsData));
 
     // =========================
-    // 🚀 5. SOCKET EMIT
+    // 🔥 5. INIT LOCATION (IMPORTANT)
     // =========================
-    const room = `slot:${slotId}`;
+    await redisClient.set(
+      `slot:${slotId}:location`,
+      JSON.stringify({
+        slotId,
+        lat: 29.9695, // default start (later replace with station)
+        lng: 76.8783,
+        updated_at: Date.now()
+      })
+    );
 
-    req.app.get("io").to(room).emit("slot_started", {
-      slotId,
-      status: "running",
-      message: "Bus started"
-    });
+    // =========================
+    // 🔥 6. UPDATE ROUTE → SLOT LIST
+    // =========================
+    const routeSlotsKey = `route:${routeId}:slots`;
+
+    const existing = await redisClient.get(routeSlotsKey);
+    let slotIds = existing ? JSON.parse(existing) : [];
+
+    if (!slotIds.includes(slotId)) {
+      slotIds.push(slotId);
+      await redisClient.set(routeSlotsKey, JSON.stringify(slotIds));
+    }
+
+    // =========================
+    // 🚀 7. SOCKET EMIT
+    // =========================
+    const io = req.app.get("io");
+
+    if (io) {
+      // 🔹 notify users already in this slot
+      io.to(`slot:${slotId}`).emit("slot_started", {
+        slotId,
+        status: "running",
+        message: "Bus started"
+      });
+
+      // 🔥 MOST IMPORTANT → update slot list UI
+      io.emit("slots_updated");
+    }
 
     console.log("🟢 Slot started:", slotId);
 
@@ -333,7 +370,6 @@ router.patch("/start", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-
 
 // ⏹ END TRIP
 router.patch("/end", async (req, res) => {
