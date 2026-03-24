@@ -50,6 +50,7 @@ module.exports = (io) => {
     socket.on("sendLocation", async (data) => {
       try {
         const { slotId, lat, lng } = data;
+
         if (!slotId || lat == null || lng == null) return;
 
         // ✅ Check slot status
@@ -59,7 +60,7 @@ module.exports = (io) => {
         const details = JSON.parse(detailsRaw);
 
         if (details.status !== "running") {
-          console.log("⛔ Location blocked (slot not running)");
+      console.log("⛔ Location blocked (slot not running)", slotId);
           return;
         }
 
