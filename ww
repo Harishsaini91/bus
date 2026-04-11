@@ -1,0 +1,287 @@
+0. GLOBAL SYSTEM CONTEXT (IMPORTANT)
+🎯 System Type
+
+Real-time Bus Tracking System
+
+👥 Actors
+User (Passenger)
+Staff (Driver/Operator)
+🔗 Core Flow
+Station Search → Route List → Slot List → Live Tracking
+🔷 1. SCREEN 1 — STATION SEARCH PAGE
+🧱 SECTION A: HEADER
+Elements:
+Menu Icon (☰)
+Title: “Bus Tracking”
+Profile Icon
+Events:
+Action	Behavior
+Click Menu	Open sidebar
+Click Profile	Navigate to profile/settings
+🧱 SECTION B: MODE TOGGLE (Station / Route)
+Elements:
+Station (Active)
+Route (Inactive)
+Events:
+onClick("Route") → navigate("/route")
+onClick("Station") → stay
+Animation:
+Slide toggle
+Active tab color change (green)
+🧱 SECTION C: SEARCH INPUT
+Elements:
+Input field
+Go Button
+Mic Button
+🔄 EVENTS
+1. Typing Event
+onChange(query)
+
+Behavior:
+Debounce (300ms)
+Call API
+🔗 API: SEARCH STATION
+get from redis and store in local for 10 min (check is local avilabel or not)
+GET http://127.0.0.1:5000/api/stationRouter/all 
+
+Request:
+
+{
+    "data": {
+        "69bfe5d30f3185e849918510": "rewari bus stand",
+        "69bfe6030f3185e849918512": "chandigarh sector 17 bus stand",
+        "69c10bd6a319d84af6ae3d90": "karnal bus stand",
+        "69c17bb8424970596706a67d": "narnaul bus stand"
+    },
+    "version": 1774459357766
+}
+
+and UI Reaction:
+Show dropdown list
+Highlight matching text
+Animate fade-in
+2. Click Suggestion
+onClick(station)
+Behavior:
+Set selected station
+Save to history
+Navigate to route list
+🧱 SECTION D: SEARCH HISTORY
+Elements:
+History list
+Clear button
+Events:
+Click History Item
+navigate("/station/:id")
+Clear History
+localStorage.clear()
+Animation:
+Slide down on load
+Fade out on typing
+🔷 2. SCREEN 2 — ROUTE SEARCH PAGE
+🧱 SECTION A: FROM / TO INPUT
+Elements:
+From Input
+Swap Button (⇄)
+To Input
+EVENTS
+1. Swap Button
+[from, to] = [to, from]
+
+Animation:
+
+Rotate icon 180°
+Swap text smoothly
+2. Validation
+if (from === to)
+  showError("Same station")
+🔗 API: FIND ROUTES
+
+http://127.0.0.1:5000/api/routeRoutes/search 
+
+{
+  "from_name": "narnaul bus stand",
+  "to_name": "rewari bus stand"
+}
+
+ [
+    {
+        "route_id": "69c1913d330295f23200368c",
+        "name": "narnaul bus stand → rewari bus stand",
+        "start_station_id": "69c17bb8424970596706a67d",
+        "end_station_id": "69bfe5d30f3185e849918510",
+        "stop_ids": [
+            "69c17bb8424970596706a67d",
+            "69bfe5d30f3185e849918510"
+        ]
+    },
+    {
+        "route_id": "69c1a49777405a71ce6eed93",
+        "name": "narnaul bus stand → rewari bus stand",
+        "start_station_id": "69c17bb8424970596706a67d",
+        "end_station_id": "69bfe5d30f3185e849918510",
+        "stop_ids": [
+            "69c17bb8424970596706a67d",
+            "69bfe5d30f3185e849918510"
+        ]
+    },
+    {
+        "route_id": "69c1ab1c70ea06d59c0b75b6",
+        "name": "narnaul bus stand → rewari bus stand",
+        "start_station_id": "69c17bb8424970596706a67d",
+        "end_station_id": "69bfe5d30f3185e849918510",
+        "stop_ids": [
+            "69c17bb8424970596706a67d",
+            "69bfe5d30f3185e849918510"
+        ]
+    }
+]
+
+UI Behavior:
+Show route cards
+Animate slide-up
+Sort active routes first
+🔷 3. SCREEN 3 — ROUTE RESULT LIST
+🧱 ROUTE CARD
+Elements:
+Route Name
+Start → End
+Stops count
+Live indicator
+Events:
+Click Route 
+navigate http://127.0.0.1:5000/api/routeRoutes/search-name?q=narnaul
+
+
+
+4. SCREEN 4 — SLOT LIST (CORE SYSTEM)
+🔗 API: GET SLOTS
+ http://localhost:5000/api/slotRouter/by-route/69c02dd5770c70f9624da35a
+
+ Response:[
+    {
+        "slot_id": "69c251e55f49f06a587a815c",
+        "route_id": "69c02dd5770c70f9624da35a",
+        "slot_name": "69c02dd5770c70f9624da35a_01:00_2026-03-24",
+        "start_time": "01:00",
+        "journey_date": "2026-03-24T18:30:00.000Z",
+        "status": "running",
+        "driver_id": null
+    },
+    {
+        "slot_id": "69c251f05f49f06a587a815f",
+        "route_id": "69c02dd5770c70f9624da35a",
+        "slot_name": "69c02dd5770c70f9624da35a_02:00_2026-03-24",
+        "start_time": "02:00",
+        "journey_date": "2026-03-24T18:30:00.000Z",
+        "status": "available",
+        "driver_id": null
+    },
+    {
+        "slot_id": "69c251ae5f49f06a587a8159",
+        "route_id": "69c02dd5770c70f9624da35a",
+        "slot_name": "69c02dd5770c70f9624da35a_05:00_2026-03-24",
+        "start_time": "05:00",
+        "journey_date": "2026-03-24T18:30:00.000Z",
+        "status": "running",
+        "driver_id": null
+    },
+    {
+        "slot_id": "69c25a6b4f3f0a79c003d2a1",
+        "route_id": "69c02dd5770c70f9624da35a",
+        "slot_name": "69c02dd5770c70f9624da35a_07:00_2026-03-24",
+        "start_time": "07:00",
+        "journey_date": "2026-03-24T18:30:00.000Z",
+        "status": "available",
+        "driver_id": null
+    },
+    {
+        "slot_id": "69c25a764f3f0a79c003d2a5",
+        "route_id": "69c02dd5770c70f9624da35a",
+        "slot_name": "69c02dd5770c70f9624da35a_08:00_2026-03-24",
+        "start_time": "08:00",
+        "journey_date": "2026-03-24T18:30:00.000Z",
+        "status": "running",
+        "driver_id": null
+    },
+    {
+        "slot_id": "69c25a7b4f3f0a79c003d2a9",
+        "route_id": "69c02dd5770c70f9624da35a",
+        "slot_name": "69c02dd5770c70f9624da35a_09:00_2026-03-24",
+        "start_time": "09:00",
+        "journey_date": "2026-03-24T18:30:00.000Z",
+        "status": "running",
+        "driver_id": null
+    }
+] 
+🧱 SLOT CARD
+Elements:
+Bus icon
+Time
+Status (Live / Upcoming)
+ETA
+Events:
+Click Slot
+socket.emit("joinSlot", { slotId })
+navigate("/tracking")
+🔷 5. SCREEN 5 — LIVE TRACKING
+🧱 MAP VIEW
+Elements:
+Map
+Bus Marker
+Route Line
+🔗 SOCKET EVENTS
+Join Room
+socket.emit("joinSlot", { slotId })
+Receive Location
+{
+  "lat": 30.74,
+  "lng": 76.78,
+  "speed": 40,
+  "nextStop": "Sector 22"
+}
+UI Reaction:
+Move marker smoothly
+Update ETA
+Animate path
+🔷 6. STAFF FLOW
+🔗 LOGIN API
+POST /api/staff/login
+Request:
+{
+  "mobile": "9876543210",
+  "password": "123456"
+}
+Response:
+{
+  "token": "abc123",
+  "staff": { "id": "1", "name": "Driver A" }
+}
+🔷 7. FIGMA INSTRUCTION (IMPORTANT)
+
+When you upload:
+
+👉 For each screen tell Figma:
+
+1. States
+Default
+Loading
+Error
+Empty
+2. Interactions
+Click → Navigate
+Input → API call
+Socket → live update
+3. Animations
+Fade (list)
+Slide (cards)
+Smooth move (map)
+4. Data Binding
+Show API response in UI
+Update dynamically
+🔥 FINAL SYSTEM BEHAVIOR
+Typing → API → Suggestion
+Click → Route API
+Click Route → Slot API
+Click Slot → Socket Join
+Socket → Live Tracking

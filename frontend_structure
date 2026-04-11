@@ -1,34 +1,4 @@
-1. Admin defines ROUTES (with ordered stops + direction)
 
-2. System defines TIME SLOTS (timetable per route)
-
-3. Staff/Driver:
-   → books a slot (creates Trip)
-   → gets reminder
-   → clicks START → trip becomes running
-
-4. User:
-   → selects stops OR route
-   → sees matching trips (time + direction)
-   → selects bus → joins room → live tracking
-
-
-
-
-   
-   PS H:\bus\bus\backend> npx nodemon server.js # backend
-
-
-
-
-   link slot to their room and show live change by join different room using slotid
-
-
-
-
-
-
-   
 
 PS H:\bus\bus\frontend\src> tree /F
 Folder PATH listing for volume pc_2
@@ -37,7 +7,7 @@ H:.
 │   App.js
 │   BusLiveView copy.js
 │   BusLiveView.js
-│   index.css  
+│   index.css
 │   index.js
 │   StationSearch.js
 │
@@ -149,35 +119,7 @@ H:.
 └───user_receive_location
         UserLiveView.js
 
-PS H:\bus\bus\frontend\src> rember structure , and we only work on  We start Station Feature (most important entry point) , 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+PS H:\bus\bus\frontend\src>
 
 
 
