@@ -6,7 +6,8 @@ function watchRoutes(io, redisClient) {
   const changeStream = Route.watch([], {
     fullDocument: "updateLookup"
   });
-
+ 
+  
   changeStream.on("change", async (change) => {
     console.log("🔥 Route changed:", change.operationType);
 
