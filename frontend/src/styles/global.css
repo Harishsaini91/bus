@@ -1,0 +1,68 @@
+/* ===============================
+   GLOBAL RESET
+================================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===============================
+   ROOT VARIABLES (THEME)
+================================ */
+:root {
+  --primary: #1f9d67;
+  --primary-dark: #178a57;
+  --bg-light: #f5f6f8;
+  --card-bg: #ffffff;
+  --text-dark: #1f2937;
+  --text-light: #6b7280;
+  --border: #e5e7eb;
+}
+
+/* ===============================
+   BODY
+================================ */
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+}
+
+/* ===============================
+   SCROLLBAR (OPTIONAL CLEAN UI)
+================================ */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
+}
+
+/* ===============================
+   BUTTON DEFAULT
+================================ */
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* ===============================
+   INPUT DEFAULT
+================================ */
+input {
+  outline: none;
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+/* ===============================
+   LINKS
+================================ */
+a {
+  text-decoration: none;
+  color: inherit;
+}
